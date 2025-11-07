@@ -1,0 +1,5 @@
+syntax = "LuaJIT"
+line_endings = "Unix"
+indent_type = "Tabs"
+call_parentheses = "None"
+space_after_function_names = "Never"
