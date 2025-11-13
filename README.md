@@ -1,6 +1,10 @@
 # slua - short for "Sandboxed Lua"
 
-A library to transpile input lua code into trivially sandboxable lua code, that doesn't need debug hooks for time limiting and replaces `x .. y` with `some_func(x, y)`
+**NOT YET FULLY FINISHED**
+- missing more testing, documentation, possibly weighing the sandbox and async
+- And usage of course
+
+A library to transpile input lua code into trivially sandboxable lua code, that doesn't need debug hooks for time limiting and replaces `x .. y` with `some_func(x, y)`, allowing you to limit concatination too
 
 ## The problems with usual lua sandboxing
 - String concatination **cannot be reliably limited**
@@ -12,7 +16,7 @@ A library to transpile input lua code into trivially sandboxable lua code, that 
     - Your code now becomes incompatible with tools like luacov
     - You have to disable JIT to use the most useful type of debug hook for sandboxing
 
-# What slua does to solve all of those
+## What slua does to solve all of those
 
 It modifies the inputted lua code. I don't think there is a better solution to this problem than doing that.
 
