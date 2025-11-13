@@ -1,16 +1,13 @@
 # Reporting vurnabilities
 
-- If it's a sandbox escape, try privately disclosing that... somehow...
-    - I know it's not the best solution but i don't expect this type of bug to ever happen
+- If it's a sandbox escape, try privately disclosing that somehow
+    - I don't expect this bug to happen
 - If it can crash/freeze a server, make a github issue
     - Unless luanti has gotten to the point where people will abuse these issues
 
 
 
 # How severe can lua sandboxing bugs get?
-
-## Does not matter that much, but could lead to crashes
-- https://github.com/minetest-mods/mesecons/issues/376
 
 ## Usually not that severe, making a server completely unusable at most
 - https://github.com/minetest-mods/mesecons/issues/711 
@@ -25,10 +22,10 @@ These issues would be really bad, but luckily are really obscure... is it bad th
 
 All lua sandboxing solutions suffer from at least one of those issues. (Except libox if you use it correctly, and if you do, the experience for the user(user=human whose code is being sandboxed) would be miserable. That is the reason i am making this project.)
 
-## In rare cases: when poo hits the fan - sandbox escape
-- https://github.com/loosewheel/lwcomputers/blame/7c1d49b0551873a0e9f5bccd3b3c83bd86514837/computer_env.lua#L27 - This allows a trivial sandbox escape
+## In rare cases: sandbox escape
+- https://github.com/loosewheel/lwcomputers/blame/7c1d49b0551873a0e9f5bccd3b3c83bd86514837/computer_env.lua#L27 - For example this allows a trivial sandbox escape
     - I am cherry-picking an extremely old commit, this has luckily been fixed
-- this type of bug is rare, unless you allow the user to mess with environments
+- this type of bug is rare, you allow the user to mess function environments or somehow completely miss `setfenv` to cause it
 - but also extremely destructive, in multiplayer, assume that if this bug is present, any player can permanently destroy your world, and access everything in that world (and all unencrypted data)
 
 # What can cause bugs/vurnabilities

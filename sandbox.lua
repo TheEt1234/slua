@@ -11,7 +11,7 @@ function slua.create_sandbox(options)
 		return nil, syntax_errors
 	end
 
-	local f, err = loadstring(generated_code, options.chunkname)
+	local f, err = loadstring(generated_code, options.chunkname or "=(load)")
 
 	if not f then
 		return nil, "Possible tl compiler bug: " .. err
@@ -21,4 +21,18 @@ function slua.create_sandbox(options)
 
 	local co = coroutine.create(f)
 	return co
+end
+
+--- begins string metatable sandboxing and just does coroutine.resume(co)
+---@param co thread
+---@param env table
+---@return boolean ok, ...
+function slua.run_sandbox(co, env)
+	local string_mt = getmetatable "string"
+
+	string_mt.__index = (env.string or {})
+	local results = { coroutine.resume(co) }
+	string_mt.__index = string
+
+	return unpack(results)
 end

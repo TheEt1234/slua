@@ -68,7 +68,7 @@ slua.default_compile = function(code)
 		sandbox_options = {
 			banned_identifiers = { ["__slua"] = true },
 			concat_function_name = "__slua.concat",
-			before_loop_end = "__slua.limit_function",
+			before_loop_end = "__slua.limit_function()",
 		},
 	})
 end

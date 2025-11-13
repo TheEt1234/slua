@@ -6,23 +6,6 @@ slua.env = {}
 ---@field limit_function fun():nil
 ---@field max_loadstring_code_length integer
 
---- Makes an immutable table
---- Name it in the environment "__slua"
----@param env_config slua.env_config
-function slua.env.make_slua_table(env_config)
-	return {
-		-- Don't put any information that may be useful to the user, because "__slua" is a forbidden identifier
-		concat = function(str1, str2)
-			assert(
-				#str1 + #str2 <= env_config.max_string_len,
-				("Concat operation violates string limit. (The limit is %s characters)"):format(max_string_len)
-			)
-			return str1 .. str2
-		end,
-		limit_function = env_config.limit_function,
-	}
-end
-
 local function immutable(table)
 	return setmetatable({}, {
 		__index = table,
@@ -33,13 +16,37 @@ local function immutable(table)
 	})
 end
 
+--- Makes an immutable table
+--- Name it in the environment "__slua"
+---@param env_config slua.env_config
+local function make_slua_table(env_config)
+	return immutable {
+		-- Don't put any information that may be useful to the user, because "__slua" is a forbidden identifier
+		-- the "__slua" name is also standardized, because it doesn't matter what the name is as long as the user can't accidentally stumble onto it
+		concat = function(str1, str2)
+			assert(
+				(#str1 + #str2) <= env_config.max_string_len,
+
+				string.format(
+					"Concat operation violates string limit. (The limit is %s characters)",
+					env_config.max_string_len
+				)
+			)
+			return str1 .. str2
+		end,
+		limit_function = env_config.limit_function,
+	}
+end
+
 ---@param env_config slua.env_config
 ---@param env table?
 ---@return table
 function slua.env.init_environment(env, env_config)
 	env = env or {}
-	env.__slua = immutable(slua.env.make_slua_table(env_config))
 	setmetatable(env, {
+		__index = {
+			__slua = make_slua_table(env_config),
+		},
 		__newindex = function(t, k, v)
 			if k == "__slua" then
 				error("Field " .. k .. " is read only!")
@@ -115,8 +122,8 @@ local function safe_table_concat(max_string_len)
 
 		local len = 0
 
-		for _, str in ipairs(t) do
-			if type(t) == "string" then
+		for _, str in ipairs(t) do -- i know i am not being exact but that doesn't really matter that much does it?
+			if type(str) == "string" then
 				len = len + #str
 			end
 		end
@@ -128,20 +135,26 @@ local function safe_table_concat(max_string_len)
 	end
 end
 
----@param env table
+-- slua.escape_string_sandbox is needed here, because it's calling to `slua.default_compiler`, which is TL code, which is basically a black box, and almost definitely makes calls in the style of ("Myepic%sstring!"):format("Whatever")
 local function safe_loadstring(config, env)
-	return function(code, name)
+	-- slua.make_safer is okay here because it doesn't call any user-provided functions, it just creates the function
+	return slua.make_safer(function(code, name)
 		assert(type(code) == "string", "Code must be a string")
 		if #code > config.max_loadstring_code_length then
-			error(("Code is too long, the limit: %s characters"):format(config.max_loadstring_code_length))
+			error(string.format("Code is too long, the limit: %s characters", config.max_loadstring_code_length))
 		end
 
 		name = name or "(load)"
 		name = "=" .. name
 
+		--- This limit is so large as to not put a limit when you are trying to make a filesystem of some kind
+		if (#name - 1) > 500 then
+			error "Chunkname is too long (What are you even trying to do?)"
+		end
+
 		local generated_code, error_messages = slua.default_compile(code)
 		if #generated_code > config.max_loadstring_code_length then
-			error(("Code is too long, the limit: %s characters"):format(config.max_loadstring_code_length))
+			error(string.format("Code is too long, the limit: %s characters", config.max_loadstring_code_length))
 		end
 		if not generated_code then
 			return nil, error_messages
@@ -149,13 +162,24 @@ local function safe_loadstring(config, env)
 
 		local f, errmsg = loadstring(generated_code, name)
 		if not f then
-			return nil, "TL generated incorrect code, please report this as a bug: " .. errmsg -- should not ever happen
+			return nil, "TL may have generated incorrect code, please report this as a bug to slua: " .. errmsg -- should not ever happen
 		end
 		f = setfenv(f, env) -- sandbox
 		f = wrap_with_limiting_function(f, config.limit_function)
 
 		-- good to go
 		return f
+	end, config)
+end
+
+---@param config slua.env_config
+local function safe_getinfo(config)
+	return function(f, what)
+		-- so umm... obviously: It shouldn't be able to get the function
+		-- the rest is fair game
+		local info = debug.getinfo(f, what)
+		info.func = nil
+		return info
 	end
 end
 
@@ -209,6 +233,7 @@ end
 ---	- OS library
 ---		- Nothing that can mess with the operating system of course
 --- - Small amount of debug
+--- - BIT library
 ---@param env table?
 ---@param config slua.env_config
 ---@return table
@@ -222,7 +247,8 @@ function slua.env.basic_env(env, config)
 		next = next,
 		pairs = pairs,
 
-		loadstring = wrap_with_limiting_function(safe_loadstring(config), config.limit_function),
+		loadstring = wrap_with_limiting_function(safe_loadstring(config, env), config.limit_function),
+		-- load is useless
 
 		pcall = pcall, -- In a sandbox regulated by errors, this wouldn't be acceptable. But no worries, slua sandboxes are supposed to be in a coroutine, where you can yield to get out of it, so pcall like this is perfectly safe
 		xpcall = wrap_with_limiting_function(xpcall),
@@ -254,7 +280,7 @@ function slua.env.basic_env(env, config)
 			upper = string.upper,
 		},
 		table = {
-			concat = wrap_with_limiting_function(safe_table_concat, config.limit_function),
+			concat = wrap_with_limiting_function(safe_table_concat(config.max_string_len), config.limit_function),
 			insert = table.insert,
 			maxn = table.maxn,
 			remove = table.remove,
@@ -268,9 +294,10 @@ function slua.env.basic_env(env, config)
 			time = os.time,
 		},
 		debug = {
-			-- kinda debating getinfo, okay: only if there is demand.
-			traceback = wrap_with_limiting_function(debug.traceback), -- can create lag if the code got itself into a mess, shouldn't be too much lag though
+			getinfo = wrap_with_limiting_function(safe_getinfo(config), config.limit_function),
+			traceback = wrap_with_limiting_function(debug.traceback, config.limit_function), -- can create lag if the code got itself into a mess, shouldn't be too much lag though
 		},
+		bit = table.copy(bit),
 	} do
 		env[k] = v
 	end
@@ -326,9 +353,9 @@ function slua.env.add_luanti_utils(env, config)
 			-- formspec related, lua sandboxing stuffs may work with formspecs
 			formspec_escape = slua.make_safer(core.formspec_escape, config),
 			hypertext_escape = slua.make_safer(core.hypertext_escape, config),
-			explode_textlist_event = slua.maker_safer(core.explode_textlist_event, config),
-			explode_table_event = slua.maker_safer(core.explode_table_event, config),
-			explode_scrollbar_event = slua.maker_safer(core.explode_scrollbar_event, config),
+			explode_textlist_event = slua.make_safer(core.explode_textlist_event, config),
+			explode_table_event = slua.make_safer(core.explode_table_event, config),
+			explode_scrollbar_event = slua.make_safer(core.explode_scrollbar_event, config),
 
 			--is_nan = core.is_nan, -- not including this one, reasoning: A programmer should learn how to check if a number is nan without this luanti-specific function
 			-- you check it with `x == x` btw, nans have the unique property of `x ~= x` being true too

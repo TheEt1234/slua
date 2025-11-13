@@ -15,6 +15,7 @@
 ---@field tag? "unknown"| "unused"| "redeclaration"| "branch"| "hint"| "debug"| "unread" the type's name internally is "WarningKind"
 
 ---@diagnostic disable-next-line: lowercase-global
+---@class slua
 slua = {}
 
 local mp = core.get_modpath "slua"
