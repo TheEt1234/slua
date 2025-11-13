@@ -2,7 +2,7 @@
 
 **NOT YET FULLY FINISHED**
 - missing more testing, documentation, possibly weighing the sandbox and async
-- And usage of course
+- and also i need to build something that uses it
 
 A library to transpile input lua code into trivially sandboxable lua code, that doesn't need debug hooks for time limiting and replaces `x .. y` with `some_func(x, y)`, allowing you to limit concatination too
 
